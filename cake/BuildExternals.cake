@@ -155,6 +155,65 @@ Task ("externals-windows")
     buildHarfBuzzArch ("x64", "x64");
 });
 
+
+// this builds the native C and C++ externals for Windows (with statically linked libSkiaSharp.dll)
+Task ("externals-winstatic")
+    .IsDependentOn ("externals-init")
+    .WithCriteria (IsRunningOnWindows ())
+    .Does (() =>  
+{
+    // libSkiaSharp
+
+    var buildArch = new Action<string, string, string> ((arch, skiaArch, dir) => {
+        // generate native skia build files
+        RunProcess (SKIA_PATH.CombineWithFilePath("bin/gn.exe"), new ProcessSettings {
+            Arguments = 
+                "gen out/winstatic/" + arch + " " + 
+                "--args=\"" +
+                "  is_official_build=true skia_enable_tools=false" +
+                "  target_os=\\\"win\\\" target_cpu=\\\"" + skiaArch + "\\\"" +
+                "  skia_use_icu=false skia_use_sfntly=false skia_use_piex=true skia_use_dng_sdk=true" +
+                "  skia_use_system_expat=false skia_use_system_libjpeg_turbo=false skia_use_system_libpng=false skia_use_system_libwebp=false skia_use_system_zlib=false" +
+                "  extra_cflags=[ \\\"-DSKIA_C_DLL\\\", \\\"/MT\\\", \\\"/EHsc\\\", \\\"/Zi\\\" ]" +
+                "  extra_ldflags=[ \\\"/DEBUG\\\" ]" +
+                "\"",
+            WorkingDirectory = SKIA_PATH.FullPath,
+        });
+
+        // build native skia
+        RunProcess (DEPOT_PATH.CombineWithFilePath ("ninja.exe"), new ProcessSettings {
+            Arguments = "-C out/winstatic/" + arch,
+            WorkingDirectory = SKIA_PATH.FullPath,
+        });
+
+        // build libSkiaSharp
+        RunMSBuildWithPlatformTarget ("native-builds/libSkiaSharp_winstatic/libSkiaSharp.sln", arch);
+
+        // copy libSkiaSharp to output
+        EnsureDirectoryExists ("native-builds/lib/winstatic/" + dir);
+        CopyFileToDirectory ("native-builds/libSkiaSharp_winstatic/bin/" + arch + "/Release/libSkiaSharp.dll", "native-builds/lib/winstatic/" + dir);
+        CopyFileToDirectory ("native-builds/libSkiaSharp_winstatic/bin/" + arch + "/Release/libSkiaSharp.pdb", "native-builds/lib/winstatic/" + dir);
+    });
+
+    buildArch ("Win32", "x86", "x86");
+    buildArch ("x64", "x64", "x64");
+
+    // libHarfBuzzSharp
+
+    var buildHarfBuzzArch = new Action<string, string> ((arch, dir) => {
+        // build libHarfBuzzSharp
+        RunMSBuildWithPlatformTarget ("native-builds/libHarfBuzzSharp_winstatic/libHarfBuzzSharp.sln", arch);
+
+        // copy libHarfBuzzSharp to output
+        EnsureDirectoryExists ("native-builds/lib/winstatic/" + dir);
+        CopyFileToDirectory ("native-builds/libHarfBuzzSharp_winstatic/bin/" + arch + "/Release/libHarfBuzzSharp.dll", "native-builds/lib/winstatic/" + dir);
+        CopyFileToDirectory ("native-builds/libHarfBuzzSharp_winstatic/bin/" + arch + "/Release/libHarfBuzzSharp.pdb", "native-builds/lib/winstatic/" + dir);
+    });
+
+    buildHarfBuzzArch ("Win32", "x86");
+    buildHarfBuzzArch ("x64", "x64");
+});
+
 // this builds the native C and C++ externals for Windows UWP
 Task ("externals-uwp")
     .IsDependentOn ("externals-init")
